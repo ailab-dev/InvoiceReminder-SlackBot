@@ -1,4 +1,5 @@
 ﻿import { google } from "googleapis";
+import { Readable } from "stream";
 
 function getDriveClient() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
@@ -32,7 +33,7 @@ export async function uploadToDrive(
     },
     media: {
       mimeType: "application/pdf",
-      body: Buffer.from(pdfBuffer),
+      body: Readable.from(pdfBuffer),
     },
     fields: "id",
   });

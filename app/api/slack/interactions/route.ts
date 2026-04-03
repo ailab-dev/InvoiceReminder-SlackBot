@@ -424,10 +424,14 @@ async function processConfirmedSubmission(draft: InternSalaryDraft, userId: stri
   console.log("[invoice] generateInvoicePdf OK, size:", pdfBuffer.length);
   const fileName = getInvoiceFileName(submission.month, submission.intern_name);
 
-  const dmResult = await slack.conversations.open({ users: userId });
-  const dmChannelId = dmResult.channel?.id;
-  console.log("[invoice] dmChannelId:", dmChannelId);
-  console.log("[invoice] INTERN_SALARY_CHANNEL_ID:", process.env.INTERN_SALARY_CHANNEL_ID ?? "(not set)");
+  const [internDm, managerDm] = await Promise.all([
+    slack.conversations.open({ users: userId }),
+    process.env.MANAGER_SLACK_ID
+      ? slack.conversations.open({ users: process.env.MANAGER_SLACK_ID })
+      : Promise.resolve(null),
+  ]);
+  const dmChannelId = internDm.channel?.id;
+  const managerChannelId = managerDm?.channel?.id;
 
   const tasks: Promise<unknown>[] = [];
 
@@ -447,10 +451,10 @@ async function processConfirmedSubmission(draft: InternSalaryDraft, userId: stri
     );
   }
 
-  if (process.env.INTERN_SALARY_CHANNEL_ID) {
+  if (managerChannelId) {
     tasks.push(
       slack.filesUploadV2({
-        channel_id: process.env.INTERN_SALARY_CHANNEL_ID,
+        channel_id: managerChannelId,
         filename: fileName,
         file: pdfBuffer,
         initial_comment: [
