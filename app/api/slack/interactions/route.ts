@@ -426,6 +426,8 @@ async function processConfirmedSubmission(draft: InternSalaryDraft, userId: stri
 
   const dmResult = await slack.conversations.open({ users: userId });
   const dmChannelId = dmResult.channel?.id;
+  console.log("[invoice] dmChannelId:", dmChannelId);
+  console.log("[invoice] INTERN_SALARY_CHANNEL_ID:", process.env.INTERN_SALARY_CHANNEL_ID ?? "(not set)");
 
   const tasks: Promise<unknown>[] = [];
 
@@ -467,10 +469,13 @@ async function processConfirmedSubmission(draft: InternSalaryDraft, userId: stri
     tasks.push(uploadToDrive(pdfBuffer, fileName, process.env.GOOGLE_DRIVE_FOLDER_ID));
   }
 
+  console.log("[invoice] tasks count:", tasks.length);
   const results = await Promise.allSettled(tasks);
   results.forEach((result, i) => {
     if (result.status === "rejected") {
       console.error(`task[${i}] failed:`, result.reason);
+    } else {
+      console.log(`task[${i}] succeeded`);
     }
   });
 }
