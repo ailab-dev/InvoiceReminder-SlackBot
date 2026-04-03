@@ -4,7 +4,7 @@ import { slack, verifySlackSignature } from "@/lib/slack";
 import { saveReminder, getReminder, completeReminder } from "@/lib/reminders";
 import { getInternProfile, saveInternProfile } from "@/lib/intern-profiles";
 import { saveSubmission, getSubmission, markAsPaid } from "@/lib/intern-salaries";
-import { generateInvoicePdf, type InvoiceData } from "@/lib/invoice-pdf";
+import { generateInvoicePdf, type InvoiceData } from "@/lib/invoice-pdf-renderer";
 import { uploadToDrive } from "@/lib/google-drive";
 import type { Reminder } from "@/types/reminder";
 import type {
