@@ -1,15 +1,28 @@
-import type {
-  InternSalaryPending,
-  InternSalarySubmission,
-} from "@/types/intern-salary";
-
+import type { InternSalarySubmission } from "@/types/intern-salary";
 import { redis } from "./redis";
+import { encrypt, decrypt } from "./crypto";
+
+function encryptSubmission(s: InternSalarySubmission): InternSalarySubmission {
+  return {
+    ...s,
+    intern_address: encrypt(s.intern_address),
+    bank_info: encrypt(s.bank_info),
+  };
+}
+
+function decryptSubmission(s: InternSalarySubmission): InternSalarySubmission {
+  return {
+    ...s,
+    intern_address: decrypt(s.intern_address),
+    bank_info: decrypt(s.bank_info),
+  };
+}
 
 export async function saveSubmission(
   submission: InternSalarySubmission
 ): Promise<void> {
   await Promise.all([
-    redis.set(`intern:salary:${submission.id}`, submission),
+    redis.set(`intern:salary:${submission.id}`, encryptSubmission(submission)),
     redis.sadd(`intern:salary:months:${submission.month}`, submission.id),
     redis.sadd(
       `intern:salary:submitted_users:${submission.month}`,
@@ -21,7 +34,9 @@ export async function saveSubmission(
 export async function getSubmission(
   id: string
 ): Promise<InternSalarySubmission | null> {
-  return redis.get<InternSalarySubmission>(`intern:salary:${id}`);
+  const s = await redis.get<InternSalarySubmission>(`intern:salary:${id}`);
+  if (!s) return null;
+  return decryptSubmission(s);
 }
 
 export async function getSubmissionsForMonth(
@@ -35,7 +50,7 @@ export async function getSubmissionsForMonth(
   );
 
   return submissions.filter(
-    (submission): submission is InternSalarySubmission => submission !== null
+    (s): s is InternSalarySubmission => s !== null
   );
 }
 
@@ -47,28 +62,12 @@ export async function markAsPaid(id: string): Promise<void> {
   const submission = await getSubmission(id);
   if (!submission) return;
 
+  // getSubmission が復号済みのデータを返すため、再暗号化して保存する
   const updated: InternSalarySubmission = {
     ...submission,
     status: "paid",
     paid_at: new Date().toISOString(),
   };
 
-  await redis.set(`intern:salary:${id}`, updated);
-}
-
-export async function savePending(
-  userId: string,
-  pending: InternSalaryPending
-): Promise<void> {
-  await redis.set(`intern:salary:pending:${userId}`, pending);
-}
-
-export async function getPending(
-  userId: string
-): Promise<InternSalaryPending | null> {
-  return redis.get<InternSalaryPending>(`intern:salary:pending:${userId}`);
-}
-
-export async function deletePending(userId: string): Promise<void> {
-  await redis.del(`intern:salary:pending:${userId}`);
+  await redis.set(`intern:salary:${id}`, encryptSubmission(updated));
 }

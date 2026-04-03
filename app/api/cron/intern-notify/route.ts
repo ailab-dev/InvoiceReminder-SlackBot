@@ -58,6 +58,12 @@ function formatMonthJP(month: string): string {
   return `${year}年${monthNum}月`;
 }
 
+// 口座番号の末尾数字列を後3桁残してマスク
+// 例: "〇〇銀行 〇〇支店 普通 1234567" → "〇〇銀行 〇〇支店 普通 ****567"
+function maskBankInfo(bankInfo: string): string {
+  return bankInfo.replace(/\d{4,}/g, (m) => "*".repeat(m.length - 3) + m.slice(-3));
+}
+
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -189,7 +195,7 @@ export async function POST(request: NextRequest) {
               type: "section",
               text: {
                 type: "mrkdwn",
-                text: `*${submission.intern_name}*\n請求合計: ¥${submission.total_amount.toLocaleString("ja-JP")}\n内訳: 単価¥${submission.unit_price.toLocaleString("ja-JP")} × ${submission.working_hours}h + 経費¥${submission.total_expense.toLocaleString("ja-JP")}`,
+                text: `*${submission.intern_name}*\n請求合計: ¥${submission.total_amount.toLocaleString("ja-JP")}\n内訳: 単価¥${submission.unit_price.toLocaleString("ja-JP")} × ${submission.working_hours}h + 経費¥${submission.total_expense.toLocaleString("ja-JP")}\n振込先: ${maskBankInfo(submission.bank_info)}`,
               },
             },
             {
