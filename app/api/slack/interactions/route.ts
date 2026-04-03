@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse, after } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { slack, verifySlackSignature } from "@/lib/slack";
 import { saveReminder, getReminder, completeReminder } from "@/lib/reminders";
@@ -779,9 +779,11 @@ export async function POST(request: NextRequest) {
       return new NextResponse(null, { status: 200 });
     }
 
-    void processConfirmedSubmission(draft, userId).catch((error) => {
-      console.error("failed to process confirmed intern salary:", error);
-    });
+    after(
+      processConfirmedSubmission(draft, userId).catch((error) => {
+        console.error("failed to process confirmed intern salary:", error);
+      })
+    );
 
     return new NextResponse(null, { status: 200 });
   }
