@@ -36,6 +36,7 @@ export async function uploadToDrive(
       body: Readable.from(pdfBuffer),
     },
     fields: "id",
+    supportsAllDrives: true,
   });
 
   if (!res.data.id) {
