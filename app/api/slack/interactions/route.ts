@@ -366,12 +366,15 @@ function buildInvoiceData(
   submission: InternSalarySubmission,
   phone: string
 ): InvoiceData {
+  const companyName = process.env.COMPANY_NAME;
+  if (!companyName) throw new Error("COMPANY_NAME is not set");
+
   const expenseByName = new Map(submission.expenses.map((e) => [e.name, e.amount]));
 
   return {
     invoiceNumber: submission.invoice_number,
     issueDate: formatTodayJP(),
-    companyName: process.env.COMPANY_NAME ?? "株式会社AilaB",
+    companyName,
     internName: submission.intern_name,
     internAddress: submission.intern_address,
     internPhone: phone,

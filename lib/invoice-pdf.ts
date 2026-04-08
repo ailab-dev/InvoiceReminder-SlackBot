@@ -1,6 +1,19 @@
-import PDFDocument from "pdfkit";
-import fs from "fs";
-import path from "path";
+import { createElement, ReactElement } from "react";
+import {
+  Document,
+  DocumentProps,
+  Font,
+  Page,
+  StyleSheet,
+  Text,
+  View,
+  renderToBuffer,
+} from "@react-pdf/renderer";
+
+Font.register({
+  family: "NotoSansJP",
+  src: "https://fonts.gstatic.com/ea/notosansjapanese/v6/NotoSansJP-Regular.otf",
+});
 
 export type InvoiceData = {
   invoiceNumber: string;
@@ -24,105 +37,114 @@ export type InvoiceData = {
   paymentDue: string;
 };
 
+const styles = StyleSheet.create({
+  page: { fontFamily: "NotoSansJP", fontSize: 10, padding: 36, lineHeight: 1.5 },
+  title: { fontSize: 20, textAlign: "center", marginBottom: 12 },
+  section: { marginBottom: 10 },
+  divider: { borderBottomWidth: 1, borderBottomColor: "#222", marginVertical: 8 },
+  row: { flexDirection: "row", justifyContent: "space-between" },
+  bold: { fontWeight: 700 },
+});
+
 function yen(amount: number): string {
   return `¥${amount.toLocaleString("ja-JP")}`;
 }
 
-export async function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
-  const fontBuffer = fs.readFileSync(
-    path.join(process.cwd(), "public/fonts/NotoSansJP-Regular.ttf")
+function makeRow(left: string, right: string) {
+  return createElement(
+    View,
+    { style: styles.row },
+    createElement(Text, null, left),
+    createElement(Text, null, right),
   );
+}
 
-  return new Promise<Buffer>((resolve, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: 50 });
-    const chunks: Buffer[] = [];
+function InvoiceDocument({ data }: { data: InvoiceData }) {
+  return createElement(
+    Document,
+    null,
+    createElement(
+      Page,
+      { size: "A4", style: styles.page },
+      createElement(Text, { style: styles.title }, "請 求 書"),
 
-    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-    doc.on("error", reject);
+      createElement(
+        View,
+        { style: styles.section },
+        createElement(Text, null, `発行日: ${data.issueDate}`),
+        createElement(Text, null, `請求書番号: ${data.invoiceNumber}`),
+      ),
 
-    doc.registerFont("JP", fontBuffer);
-    doc.font("JP").fontSize(10);
+      createElement(
+        View,
+        { style: styles.section },
+        createElement(Text, null, "請求先:"),
+        createElement(Text, null, `${data.companyName} 御中`),
+      ),
 
-    const L = 50;
-    const W = 495;
+      createElement(
+        View,
+        { style: styles.section },
+        createElement(Text, null, "請求者:"),
+        createElement(Text, null, String(data.internName)),
+        createElement(Text, null, String(data.internAddress)),
+        createElement(Text, null, String(data.internPhone)),
+      ),
 
-    function divider() {
-      doc.moveDown(0.5);
-      doc.moveTo(L, doc.y).lineTo(L + W, doc.y).stroke();
-      doc.moveDown(0.5);
-    }
+      createElement(View, { style: styles.divider }),
 
-    function row(label: string, value: string) {
-      const y = doc.y;
-      doc.text(label, L, y, { width: W * 0.6 });
-      doc.text(value, L + W * 0.55, y, { width: W * 0.45, align: "right" });
-    }
+      createElement(
+        View,
+        { style: styles.section },
+        createElement(Text, null, `件名: ${data.month}分 業務委託費`),
+      ),
 
-    // タイトル
-    doc.fontSize(18).text("請 求 書", L, doc.y, { align: "center", width: W });
-    doc.moveDown();
-    doc.fontSize(10);
+      createElement(
+        View,
+        { style: styles.section },
+        makeRow("稼働時間", `${data.workingHours}時間`),
+        makeRow("単価", `${yen(data.unitPrice)} / 時`),
+        makeRow("給与小計", yen(data.totalSalary)),
+      ),
 
-    // 発行情報
-    doc.text(`発行日: ${data.issueDate}`);
-    doc.text(`請求書番号: ${data.invoiceNumber}`);
-    doc.moveDown();
+      createElement(
+        View,
+        { style: styles.section },
+        createElement(Text, null, "経費内訳:"),
+        makeRow("移動費", yen(data.expenseTransport)),
+        makeRow("交通費", yen(data.expenseTravel)),
+        makeRow("AI利用費", yen(data.expenseAi)),
+        makeRow("経費合計", yen(data.totalExpense)),
+      ),
 
-    // 請求先
-    doc.text("請求先:");
-    doc.text(`${data.companyName} 御中`);
-    doc.moveDown();
+      createElement(View, { style: styles.divider }),
 
-    // 請求者
-    doc.text("請求者:");
-    doc.text(data.internName);
-    doc.text(data.internAddress);
-    doc.text(data.internPhone);
+      createElement(
+        View,
+        { style: styles.section },
+        makeRow("税抜合計", yen(data.subtotal)),
+        makeRow("消費税（10%）", yen(data.taxAmount)),
+        createElement(
+          View,
+          { style: styles.row },
+          createElement(Text, { style: styles.bold }, "税込請求合計"),
+          createElement(Text, { style: styles.bold }, yen(data.totalAmount)),
+        ),
+      ),
 
-    divider();
+      createElement(View, { style: styles.divider }),
 
-    // 件名
-    doc.text(`件名: ${data.month}分 業務委託費`);
-    doc.moveDown();
+      createElement(
+        View,
+        { style: styles.section },
+        createElement(Text, null, "お振込先:"),
+        createElement(Text, null, String(data.bankInfo)),
+        createElement(Text, null, `振込期限: ${data.paymentDue}`),
+      ),
+    ),
+  );
+}
 
-    // 稼働・単価・小計
-    row("稼働時間", `${data.workingHours}時間`);
-    doc.moveDown(0.3);
-    row("単価", `${yen(data.unitPrice)} / 時`);
-    doc.moveDown(0.3);
-    row("給与小計", yen(data.totalSalary));
-    doc.moveDown();
-
-    // 経費
-    doc.text("経費内訳:");
-    doc.moveDown(0.3);
-    row("　移動費", yen(data.expenseTransport));
-    doc.moveDown(0.3);
-    row("　交通費", yen(data.expenseTravel));
-    doc.moveDown(0.3);
-    row("　AI利用費", yen(data.expenseAi));
-    doc.moveDown(0.3);
-    row("経費合計", yen(data.totalExpense));
-
-    divider();
-
-    // 合計
-    row("税抜合計", yen(data.subtotal));
-    doc.moveDown(0.3);
-    row("消費税（10%）", yen(data.taxAmount));
-    doc.moveDown(0.3);
-    doc.fontSize(11);
-    row("税込請求合計", yen(data.totalAmount));
-    doc.fontSize(10);
-
-    divider();
-
-    // 振込先
-    doc.text("お振込先:");
-    doc.text(data.bankInfo);
-    doc.text(`振込期限: ${data.paymentDue}`);
-
-    doc.end();
-  });
+export async function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
+  return (await renderToBuffer(InvoiceDocument({ data }) as ReactElement<DocumentProps>));
 }
