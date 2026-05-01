@@ -499,14 +499,19 @@ async function processConfirmedSubmission(draft: InternSalaryDraft, userId: stri
   console.log("[invoice] generateInvoicePdf OK, size:", pdfBuffer.length);
   const fileName = getInvoiceFileName(submission.month, submission.intern_name);
 
-  const [internDm, managerDm] = await Promise.all([
+  const managerIds = (process.env.MANAGER_SLACK_ID ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+
+  const [internDm, ...managerDms] = await Promise.all([
     slack.conversations.open({ users: userId }),
-    process.env.MANAGER_SLACK_ID
-      ? slack.conversations.open({ users: process.env.MANAGER_SLACK_ID })
-      : Promise.resolve(null),
+    ...managerIds.map((id) => slack.conversations.open({ users: id })),
   ]);
   const dmChannelId = internDm.channel?.id;
-  const managerChannelId = managerDm?.channel?.id;
+  const managerChannelIds = managerDms
+    .map((dm) => dm.channel?.id)
+    .filter((id): id is string => Boolean(id));
 
   const tasks: Promise<unknown>[] = [];
 
@@ -526,7 +531,7 @@ async function processConfirmedSubmission(draft: InternSalaryDraft, userId: stri
     );
   }
 
-  if (managerChannelId) {
+  for (const managerChannelId of managerChannelIds) {
     tasks.push(
       slack.filesUploadV2({
         channel_id: managerChannelId,
