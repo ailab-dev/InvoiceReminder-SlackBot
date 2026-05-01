@@ -99,14 +99,33 @@ function buildEmptyExpenseNames(expenses: ExpenseItem[]): string[] {
   return names;
 }
 
+function getMonthOptions() {
+  const now = new Date();
+  const jst = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+  const options = [];
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(jst.getFullYear(), jst.getMonth() - i, 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const value = `${y}-${m}`;
+    options.push({
+      text: { type: "plain_text" as const, text: formatMonthJP(value) },
+      value,
+    });
+  }
+  return options;
+}
+
 function buildInternSalaryModal(
   month: string,
+  salaryType: "hourly" | "fixed",
   initialValues: {
     name: string;
     address: string;
     phone: string;
     unitPrice: string;
     workingHours: string;
+    fixedAmount: string;
     expense1Name: string;
     expense1Amount: string;
     expense2Name: string;
@@ -116,19 +135,89 @@ function buildInternSalaryModal(
     bankInfo: string;
   }
 ) {
+  const salaryOption = (value: "hourly" | "fixed", label: string) => ({
+    text: { type: "plain_text" as const, text: label },
+    value,
+  });
+
+  const salaryBlocks =
+    salaryType === "fixed"
+      ? [
+          {
+            type: "input" as const,
+            block_id: "fixed_amount_block",
+            label: { type: "plain_text" as const, text: "月額固定報酬（円）" },
+            element: {
+              type: "plain_text_input" as const,
+              action_id: "fixed_amount_input",
+              initial_value: initialValues.fixedAmount,
+              placeholder: { type: "plain_text" as const, text: "例: 100000" },
+            },
+          },
+        ]
+      : [
+          {
+            type: "input" as const,
+            block_id: "unit_price_block",
+            label: { type: "plain_text" as const, text: "単価（円/時）" },
+            element: {
+              type: "plain_text_input" as const,
+              action_id: "unit_price_input",
+              initial_value: initialValues.unitPrice,
+            },
+          },
+          {
+            type: "input" as const,
+            block_id: "working_hours_block",
+            label: { type: "plain_text" as const, text: "稼働時間" },
+            element: {
+              type: "plain_text_input" as const,
+              action_id: "working_hours_input",
+              initial_value: initialValues.workingHours,
+              placeholder: { type: "plain_text" as const, text: "例: 40.5" },
+            },
+          },
+        ];
+
   return {
     type: "modal" as const,
     callback_id: "intern_salary_modal",
-    private_metadata: JSON.stringify({ month }),
+    private_metadata: JSON.stringify({
+      savedUnitPrice: initialValues.unitPrice,
+      savedWorkingHours: initialValues.workingHours,
+      savedFixedAmount: initialValues.fixedAmount,
+    }),
     title: { type: "plain_text" as const, text: "インターン給与提出" },
     submit: { type: "plain_text" as const, text: "内容を確認する" },
     close: { type: "plain_text" as const, text: "キャンセル" },
     blocks: [
       {
-        type: "section" as const,
-        text: {
-          type: "mrkdwn" as const,
-          text: `*対象月*: ${formatMonthJP(month)}`,
+        type: "input" as const,
+        block_id: "month_block",
+        label: { type: "plain_text" as const, text: "対象月" },
+        element: {
+          type: "static_select" as const,
+          action_id: "month_select",
+          initial_option: {
+            text: { type: "plain_text" as const, text: formatMonthJP(month) },
+            value: month,
+          },
+          options: getMonthOptions(),
+        },
+      },
+      {
+        type: "input" as const,
+        block_id: "salary_type_block",
+        dispatch_action: true,
+        label: { type: "plain_text" as const, text: "報酬タイプ" },
+        element: {
+          type: "radio_buttons" as const,
+          action_id: "salary_type_select",
+          initial_option: salaryOption(salaryType, salaryType === "fixed" ? "固定給" : "時給制"),
+          options: [
+            salaryOption("hourly", "時給制"),
+            salaryOption("fixed", "固定給"),
+          ],
         },
       },
       {
@@ -165,27 +254,7 @@ function buildInternSalaryModal(
           initial_value: initialValues.phone,
         },
       },
-      {
-        type: "input" as const,
-        block_id: "unit_price_block",
-        label: { type: "plain_text" as const, text: "単価（円/時）" },
-        element: {
-          type: "plain_text_input" as const,
-          action_id: "unit_price_input",
-          initial_value: initialValues.unitPrice,
-        },
-      },
-      {
-        type: "input" as const,
-        block_id: "working_hours_block",
-        label: { type: "plain_text" as const, text: "稼働時間" },
-        element: {
-          type: "plain_text_input" as const,
-          action_id: "working_hours_input",
-          initial_value: initialValues.workingHours,
-          placeholder: { type: "plain_text" as const, text: "例: 40.5" },
-        },
-      },
+      ...salaryBlocks,
       {
         type: "section" as const,
         text: {
@@ -308,9 +377,13 @@ function buildConfirmModal(draft: InternSalaryDraft) {
             `*電話番号*: ${draft.phone}`,
             `*対象月*: ${formatMonthJP(draft.month)}`,
             "",
-            `*単価*: ${formatCurrency(draft.unit_price)}/時`,
-            `*稼働時間*: ${draft.working_hours}時間`,
-            `*給与小計*: ${formatCurrency(draft.total_salary)}`,
+            ...(draft.salary_type === "fixed"
+              ? [`*月額固定報酬*: ${formatCurrency(draft.total_salary)}`]
+              : [
+                  `*単価*: ${formatCurrency(draft.unit_price)}/時`,
+                  `*稼働時間*: ${draft.working_hours}時間`,
+                  `*給与小計*: ${formatCurrency(draft.total_salary)}`,
+                ]),
             "",
             "*経費内訳*: ",
             expenseLines,
@@ -369,8 +442,6 @@ function buildInvoiceData(
   const companyName = process.env.COMPANY_NAME;
   if (!companyName) throw new Error("COMPANY_NAME is not set");
 
-  const expenseByName = new Map(submission.expenses.map((e) => [e.name, e.amount]));
-
   return {
     invoiceNumber: submission.invoice_number,
     issueDate: formatTodayJP(),
@@ -379,12 +450,11 @@ function buildInvoiceData(
     internAddress: submission.intern_address,
     internPhone: phone,
     month: formatMonthJP(submission.month),
+    salaryType: submission.salary_type ?? "hourly",
     workingHours: submission.working_hours,
     unitPrice: submission.unit_price,
     totalSalary: submission.total_salary,
-    expenseTransport: expenseByName.get("移動費") ?? 0,
-    expenseTravel: expenseByName.get("交通費") ?? 0,
-    expenseAi: expenseByName.get("AI利用費") ?? 0,
+    expenses: submission.expenses,
     totalExpense: submission.total_expense,
     subtotal: submission.subtotal,
     taxAmount: submission.tax_amount,
@@ -414,7 +484,9 @@ async function processConfirmedSubmission(draft: InternSalaryDraft, userId: stri
     address: draft.intern_address,
     phone: draft.phone,
     bank_info: draft.bank_info,
+    salary_type: draft.salary_type,
     unit_price: draft.unit_price,
+    fixed_amount: draft.salary_type === "fixed" ? draft.total_salary : undefined,
     expense_names: buildEmptyExpenseNames(draft.expenses),
     updated_at: submittedAt,
   };
@@ -570,19 +642,73 @@ export async function POST(request: NextRequest) {
       return new NextResponse(null, { status: 200 });
     }
 
+    if (action.action_id === "salary_type_select") {
+      const newSalaryType: "hourly" | "fixed" =
+        action.selected_option?.value === "fixed" ? "fixed" : "hourly";
+      const currentValues = payload.view.state.values;
+      const metadata = JSON.parse(payload.view.private_metadata || "{}") as {
+        month?: string;
+        savedUnitPrice?: string;
+        savedWorkingHours?: string;
+        savedFixedAmount?: string;
+      };
+      const month =
+        currentValues.month_block?.month_select?.selected_option?.value ??
+        metadata.month ??
+        getCurrentMonthJST();
+
+      await slack.views.update({
+        view_id: payload.view.id,
+        hash: payload.view.hash,
+        view: buildInternSalaryModal(month, newSalaryType, {
+          name: currentValues.name_block?.name_input?.value ?? "",
+          address: currentValues.address_block?.address_input?.value ?? "",
+          phone: currentValues.phone_block?.phone_input?.value ?? "",
+          unitPrice:
+            currentValues.unit_price_block?.unit_price_input?.value ??
+            metadata.savedUnitPrice ??
+            "",
+          workingHours:
+            currentValues.working_hours_block?.working_hours_input?.value ??
+            metadata.savedWorkingHours ??
+            "",
+          fixedAmount:
+            currentValues.fixed_amount_block?.fixed_amount_input?.value ??
+            metadata.savedFixedAmount ??
+            "",
+          expense1Name:
+            currentValues.expense_1_name_block?.expense_1_name_input?.value ?? "",
+          expense1Amount:
+            currentValues.expense_1_amount_block?.expense_1_amount_input?.value ?? "",
+          expense2Name:
+            currentValues.expense_2_name_block?.expense_2_name_input?.value ?? "",
+          expense2Amount:
+            currentValues.expense_2_amount_block?.expense_2_amount_input?.value ?? "",
+          expense3Name:
+            currentValues.expense_3_name_block?.expense_3_name_input?.value ?? "",
+          expense3Amount:
+            currentValues.expense_3_amount_block?.expense_3_amount_input?.value ?? "",
+          bankInfo: currentValues.bank_info_block?.bank_info_input?.value ?? "",
+        }),
+      });
+      return new NextResponse(null, { status: 200 });
+    }
+
     if (action.action_id === "open_intern_salary_modal") {
       const userId: string = payload.user.id;
       const profile = await getInternProfile(userId);
       const currentMonth = getCurrentMonthJST();
 
+      const salaryType: "hourly" | "fixed" = profile?.salary_type ?? "hourly";
       await slack.views.open({
         trigger_id: payload.trigger_id,
-        view: buildInternSalaryModal(currentMonth, {
+        view: buildInternSalaryModal(currentMonth, salaryType, {
           name: profile?.name ?? "",
           address: profile?.address ?? "",
           phone: profile?.phone ?? "",
-          unitPrice: profile?.unit_price?.toString() ?? "",
+          unitPrice: salaryType === "hourly" ? (profile?.unit_price?.toString() ?? "") : "",
           workingHours: "",
+          fixedAmount: salaryType === "fixed" ? (profile?.fixed_amount?.toString() ?? "") : "",
           expense1Name: profile?.expense_names?.[0] ?? "",
           expense1Amount: "",
           expense2Name: profile?.expense_names?.[1] ?? "",
@@ -674,11 +800,20 @@ export async function POST(request: NextRequest) {
     const values = payload.view.state.values;
     const userId: string = payload.user.id;
 
+    const salaryType: "hourly" | "fixed" =
+      values.salary_type_block?.salary_type_select?.selected_option?.value === "fixed"
+        ? "fixed"
+        : "hourly";
+
     const name: string = values.name_block.name_input.value.trim();
     const address: string = values.address_block.address_input.value.trim();
     const phone: string = values.phone_block.phone_input.value.trim();
-    const unitPriceRaw: string = values.unit_price_block.unit_price_input.value.trim();
-    const workingHoursRaw: string = values.working_hours_block.working_hours_input.value.trim();
+    const unitPriceRaw: string =
+      values.unit_price_block?.unit_price_input?.value?.trim() ?? "";
+    const workingHoursRaw: string =
+      values.working_hours_block?.working_hours_input?.value?.trim() ?? "";
+    const fixedAmountRaw: string =
+      values.fixed_amount_block?.fixed_amount_input?.value?.trim() ?? "";
     const bankInfo: string = values.bank_info_block.bank_info_input.value.trim();
 
     const errors: Record<string, string> = {};
@@ -688,12 +823,17 @@ export async function POST(request: NextRequest) {
     if (!phone) errors.phone_block = "電話番号を入力してください。";
     if (!bankInfo) errors.bank_info_block = "振込口座を入力してください。";
 
-    if (!/^\d+$/.test(unitPriceRaw) || Number(unitPriceRaw) <= 0) {
-      errors.unit_price_block = "単価は正の整数で入力してください。";
-    }
-
-    if (!/^\d+(\.\d+)?$/.test(workingHoursRaw) || Number(workingHoursRaw) <= 0) {
-      errors.working_hours_block = "稼働時間は正の数値で入力してください。";
+    if (salaryType === "fixed") {
+      if (!/^\d+$/.test(fixedAmountRaw) || Number(fixedAmountRaw) <= 0) {
+        errors.fixed_amount_block = "月額固定報酬は正の整数で入力してください。";
+      }
+    } else {
+      if (!/^\d+$/.test(unitPriceRaw) || Number(unitPriceRaw) <= 0) {
+        errors.unit_price_block = "単価は正の整数で入力してください。";
+      }
+      if (!/^\d+(\.\d+)?$/.test(workingHoursRaw) || Number(workingHoursRaw) <= 0) {
+        errors.working_hours_block = "稼働時間は正の数値で入力してください。";
+      }
     }
 
     const expenses = [
@@ -724,19 +864,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ response_action: "errors", errors }, { status: 200 });
     }
 
-    let month = getCurrentMonthJST();
-    if (payload.view.private_metadata) {
-      try {
-        const metadata = JSON.parse(payload.view.private_metadata) as { month?: string };
-        if (metadata.month) month = metadata.month;
-      } catch {
-        month = getCurrentMonthJST();
-      }
-    }
+    const month: string =
+      values.month_block?.month_select?.selected_option?.value ?? getCurrentMonthJST();
 
-    const unitPrice = Number(unitPriceRaw);
-    const workingHours = Number(workingHoursRaw);
-    const totalSalary = Math.floor(unitPrice * workingHours);
+    let unitPrice = 0;
+    let workingHours = 0;
+    let totalSalary = 0;
+    if (salaryType === "fixed") {
+      totalSalary = Number(fixedAmountRaw);
+    } else {
+      unitPrice = Number(unitPriceRaw);
+      workingHours = Number(workingHoursRaw);
+      totalSalary = Math.floor(unitPrice * workingHours);
+    }
     const totalExpense = expenses.reduce((sum, e) => sum + e.amount, 0);
     const subtotal = totalSalary + totalExpense;
     const taxAmount = Math.round(subtotal * 0.1);
@@ -748,6 +888,7 @@ export async function POST(request: NextRequest) {
       intern_address: address,
       phone,
       month,
+      salary_type: salaryType,
       unit_price: unitPrice,
       working_hours: workingHours,
       expenses,
@@ -792,7 +933,7 @@ export async function POST(request: NextRequest) {
       })
     );
 
-    return new NextResponse(null, { status: 200 });
+    return NextResponse.json({ response_action: "clear" }, { status: 200 });
   }
 
   return new NextResponse(null, { status: 200 });

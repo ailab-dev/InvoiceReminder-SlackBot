@@ -4,7 +4,9 @@ export type InternProfile = {
   address: string;
   phone: string;
   bank_info: string;
+  salary_type: "hourly" | "fixed";
   unit_price: number;
+  fixed_amount?: number;
   expense_names: string[];
   updated_at: string;
 };
@@ -20,6 +22,7 @@ export type InternSalarySubmission = {
   intern_name: string;
   intern_address: string;
   month: string;
+  salary_type: "hourly" | "fixed";
   unit_price: number;
   working_hours: number;
   expenses: ExpenseItem[];

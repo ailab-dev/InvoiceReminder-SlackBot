@@ -10,12 +10,11 @@ export type InvoiceData = {
   internAddress: string;
   internPhone: string;
   month: string;
+  salaryType: "hourly" | "fixed";
   workingHours: number;
   unitPrice: number;
   totalSalary: number;
-  expenseTransport: number;
-  expenseTravel: number;
-  expenseAi: number;
+  expenses: { name: string; amount: number }[];
   totalExpense: number;
   subtotal: number;
   taxAmount: number;
@@ -81,21 +80,28 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
     doc.text(`件名: ${data.month}分 業務委託費`);
     doc.moveDown();
 
-    row("稼働時間", `${data.workingHours}時間`);
-    doc.moveDown(0.3);
-    row("単価", `${yen(data.unitPrice)} / 時`);
-    doc.moveDown(0.3);
-    row("給与小計", yen(data.totalSalary));
+    if (data.salaryType === "fixed") {
+      row("月額固定報酬", yen(data.totalSalary));
+    } else {
+      row("稼働時間", `${data.workingHours}時間`);
+      doc.moveDown(0.3);
+      row("単価", `${yen(data.unitPrice)} / 時`);
+      doc.moveDown(0.3);
+      row("給与小計", yen(data.totalSalary));
+    }
     doc.moveDown();
 
     doc.text("経費内訳:");
     doc.moveDown(0.3);
-    row("　移動費", yen(data.expenseTransport));
-    doc.moveDown(0.3);
-    row("　交通費", yen(data.expenseTravel));
-    doc.moveDown(0.3);
-    row("　AI利用費", yen(data.expenseAi));
-    doc.moveDown(0.3);
+    if (data.expenses.length === 0) {
+      doc.text("　なし");
+      doc.moveDown(0.3);
+    } else {
+      for (const expense of data.expenses) {
+        row(`　${expense.name}`, yen(expense.amount));
+        doc.moveDown(0.3);
+      }
+    }
     row("経費合計", yen(data.totalExpense));
 
     divider();
