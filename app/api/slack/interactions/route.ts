@@ -231,7 +231,9 @@ function buildInternSalaryModal(
           initial_option: {
             text: {
               type: "plain_text" as const,
-              text: initialValues.salaryTaxType === "inclusive" ? "税込み" : "税抜き",
+              text: initialValues.salaryTaxType === "inclusive"
+                ? "税込み（消費税を含む金額）"
+                : "税抜き（消費税10%を別途加算）",
             },
             value: initialValues.salaryTaxType,
           },
